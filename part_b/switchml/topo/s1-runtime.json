@@ -1,0 +1,99 @@
+{
+  "target": "bmv2",
+  "p4info": "build/switchml.p4.p4info.txt",
+  "bmv2_json": "build/switchml.json",
+  "table_entries": [
+      {
+          "table": "MyIngress.ipv4_forward",
+          "match": { "hdr.ipv4.dstAddr": "10.0.0.1" },
+          "action_name": "MyIngress.ipv4_forward_action",
+          "action_params": { 
+              "port" : 1
+          }
+      },
+      {
+          "table": "MyIngress.ipv4_forward",
+          "match": { "hdr.ipv4.dstAddr": "10.0.0.2" },
+          "action_name": "MyIngress.ipv4_forward_action",
+          "action_params": { 
+              "port" : 2
+          }
+      },
+      {
+          "table": "MyIngress.ipv4_forward",
+          "match": { "hdr.ipv4.dstAddr": "10.0.0.3" },
+          "action_name": "MyIngress.ipv4_forward_action",
+          "action_params": { 
+              "port" : 3
+          }
+      },
+      {
+          "table": "MyIngress.ipv4_forward",
+          "match": { "hdr.ipv4.dstAddr": "10.0.0.4" },
+          "action_name": "MyIngress.ipv4_forward_action",
+          "action_params": { 
+              "port" : 4
+          }
+      },
+      {
+        "table": "MyEgress.port_to_host",
+        "match": { "standard_metadata.egress_port": 1 },
+        "action_name": "MyEgress.set_host",
+        "action_params": { 
+            "eth_addr": "08:00:00:00:01:11",
+            "ip_addr": "10.0.0.1"
+        }
+      },
+      {
+        "table": "MyEgress.port_to_host",
+        "match": { "standard_metadata.egress_port": 2 },
+        "action_name": "MyEgress.set_host",
+        "action_params": { 
+            "eth_addr": "08:00:00:00:02:22",
+            "ip_addr": "10.0.0.2"
+        }
+      },
+      {
+        "table": "MyEgress.port_to_host",
+        "match": { "standard_metadata.egress_port": 3 },
+        "action_name": "MyEgress.set_host",
+        "action_params": { 
+            "eth_addr": "08:00:00:00:03:33",
+            "ip_addr": "10.0.0.3"
+        }
+      },
+      {
+        "table": "MyEgress.port_to_host",
+        "match": { "standard_metadata.egress_port": 4 },
+        "action_name": "MyEgress.set_host",
+        "action_params": { 
+            "eth_addr": "08:00:00:00:04:44",
+            "ip_addr": "10.0.0.4"
+        }
+      }
+  ],
+  "multicast_group_entries" : [
+      {
+          "multicast_group_id" : 1,
+          "replicas" : [
+              {
+                  "egress_port" : 1,
+                  "instance" : 1
+              },
+              {
+                  "egress_port" : 2,
+                  "instance" : 1
+              },
+              {
+                  "egress_port" : 3,
+                  "instance" : 1
+              }, 
+              {
+                  "egress_port" : 4,
+                  "instance" : 1
+              }
+          ]
+      }
+  ]
+}
+

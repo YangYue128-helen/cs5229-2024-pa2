@@ -1,0 +1,55 @@
+{
+  "target": "bmv2",
+  "p4info": "build/secret.p4.p4info.txt",
+  "bmv2_json": "build/secret.json",
+  "table_entries": [
+    {
+      "table": "MyIngress.ipv4_forward",
+      "match": { "hdr.ipv4.dstAddr": "10.0.0.1" },
+      "action_name": "MyIngress.ipv4_forward_action",
+      "action_params": { 
+          "port" : 1
+      }
+    },
+    {
+      "table": "MyIngress.ipv4_forward",
+      "match": { "hdr.ipv4.dstAddr": "10.0.0.2" },
+      "action_name": "MyIngress.ipv4_forward_action",
+      "action_params": { 
+          "port" : 2
+      }
+    },
+    {
+      "table": "MyIngress.ipv4_forward",
+      "match": { "hdr.ipv4.dstAddr": "10.0.0.3" },
+      "action_name": "MyIngress.ipv4_forward_action",
+      "action_params": { 
+          "port" : 3
+      }
+    },
+    {
+      "table": "MyIngress.password_check",
+      "match": { "hdr.secret.hostID": 1 },
+      "action_name": "MyIngress.check_password",
+      "action_params": { 
+          "stored_password" : 2195217097
+      }
+    },
+    {
+      "table": "MyIngress.password_check",
+      "match": { "hdr.secret.hostID": 2 },
+      "action_name": "MyIngress.check_password",
+      "action_params": { 
+          "stored_password" : 3312984089
+      }
+    },
+    {
+      "table": "MyIngress.password_check",
+      "match": { "hdr.secret.hostID": 3 },
+      "action_name": "MyIngress.check_password",
+      "action_params": { 
+          "stored_password" : 4162324905
+      }
+    }
+   ]
+}
