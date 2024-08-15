@@ -16,8 +16,8 @@ set -x
 p4c --target bmv2 \
     --arch v1model \
     --output ./out \
-    --p4runtime-files ./out/secret.p4info.txt \
-    secret.p4
+    --p4runtime-files ./out/switchml.p4info.txt \
+    switchml.p4
 
 sudo simple_switch_grpc \
      --log-file ./out/ss-log \
@@ -52,7 +52,7 @@ sudo `which ptf` \
     -i 5@veth11 \
     -i 6@veth13 \
     -i 7@veth15 \
-    --test-params="grpcaddr='localhost:9559';p4info='./out/secret.p4info.txt';config='./out/secret.json'" \
+    --test-params="grpcaddr='localhost:9559';p4info='./out/switchml.p4info.txt';config='./out/switchml.json'" \
     --test-dir ptf
 
 echo ""
