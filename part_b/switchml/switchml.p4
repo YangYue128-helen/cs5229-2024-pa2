@@ -167,6 +167,10 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
 
+    action drop() {
+        mark_to_drop(standard_metadata);
+    }
+
     action set_host(macAddr_t eth_addr, ip4Addr_t ip_addr, bit<16> host_id) {
         /* TODO: your code here */
     }
