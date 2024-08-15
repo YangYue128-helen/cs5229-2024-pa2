@@ -166,6 +166,7 @@ control MyIngress(inout headers hdr,
             /* Hint 4: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
             /* Hint 5: msg_checksums are important! */
             /* Hint 6: once everything is done, swap addresses, set port and reply to sender */
+            password_check.apply();
         }
         ipv4_forward.apply();
     }

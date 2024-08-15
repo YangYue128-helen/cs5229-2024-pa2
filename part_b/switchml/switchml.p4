@@ -117,6 +117,10 @@ control MyIngress(inout headers hdr,
 
     /* TODO: Define your registers */
     /* TODO: Define your action functions */
+
+    action ipv4_forward_action(egressSpec_t port) {
+        /* TODO: your code here */
+    }
     
     action multicast() {
         standard_metadata.mcast_grp = 1;
@@ -124,6 +128,18 @@ control MyIngress(inout headers hdr,
 
     action drop() {
         mark_to_drop(standard_metadata);
+    }
+
+    table ipv4_forward {
+        key = {
+            hdr.ipv4.dstAddr: exact;
+        }
+        actions = {
+            ipv4_forward_action;
+            multicast;
+            drop;
+        }
+        default_action = multicast();
     }
 
     apply {
@@ -135,6 +151,7 @@ control MyIngress(inout headers hdr,
             /* Hint 4: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
             /* Hint 5: msg_checksums are important! */
             /* Hint 6: once everything is done, swap addresses, set port and reply to sender */
+            ipv4_forward.apply();
         } else {
             // Not IPv4 packet
             drop();
@@ -150,10 +167,27 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
 
+    action set_host(macAddr_t eth_addr, ip4Addr_t ip_addr, bit<16> host_id) {
+        /* TODO: your code here */
+    }
+
+    table port_to_host {
+        key = {
+            standard_metadata.egress_port : exact;
+        }
+        actions = {
+            set_host;
+            drop;
+        }
+        size = 1024;
+        default_action = drop;
+    }
+
     apply {
         /* TODO: your codes here */
         /* HINT: update destination information */
         /* HINT: check the runtime table, there will something you need*/
+        port_to_host.apply();
     }
 }
 

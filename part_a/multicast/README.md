@@ -77,9 +77,7 @@ in Mininet to test its behavior.
    make clean
    ```
 
-The ping failed because each switch is programmed according to `multicast.p4`,
-which drops all packets on arrival. Your job is to extend this file so it
-forwards packets.
+The ping can reach, but the multicast functions are not implemented yet. Next, you should start writting the code for required functions.
 
 ### A note about the control plane
 

@@ -110,9 +110,7 @@ control MyIngress(inout headers hdr,
         /*  TODO: your code here */
         /*  HINT: do you need any metadata? */
 
-        if (hdr.ethernet.isValid()) {
-            /*  TODO: your code here */
-        }
+        mac_lookup.apply();
 
     }
 
@@ -149,6 +147,9 @@ control MyEgress(inout headers hdr,
 
     apply {
         /* TODO: your code here */
+
+        port_to_mac.apply();
+        
     }
 }
 
