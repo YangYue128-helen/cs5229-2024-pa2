@@ -2,9 +2,13 @@
 
 ## Introduction
 
-The objective of this exercise is to write a P4 program that multicasts packets to a group of ports.
+In our very first assignment, to get you familiar with the basics of P4, and programmable network, we want to start from writting a customized "multicast" function. 
 
-Sometimes, one copy of data can be requested by multiple hosts. To save the network bandwidth of source host, performing multicast in the network might be a good option. In this assignment, let's implement the customized multicast function with P4. 
+(Note: We will define a customized function, which could be very different from the standard multicast protocols. We want to show you that with programmable network, we can customize a lot of functions without limited by the standards.)
+
+Sometimes, one copy of data can be requested by multiple hosts. To save the network bandwidth of source host, performing multicast in the network might be a good option. 
+
+In this assignment, let's implement a customized multicast function with P4. 
 
 The topology we will use for this exercise is like this. It is a single switch that connects three hosts as follow:
 
@@ -16,21 +20,38 @@ The topology we will use for this exercise is like this. It is a single switch t
                         \
                          h3
 
-We will define a customized packet header `multicast_grp`, it is simply a tag to tell the switch that which hosts this packet should be sent to. The switch will process the forwarding action base on this tag.
+We want the users to freely decide which hosts they want to multicast their messages to. To do so, we will define a customized packet header `multicast_grp`, it works as a tag to tell the switch that which group of hosts this packet should be sent to.
 
-We have already defined some single multicast groups in the switch runtime: 
+The `multicast_grp` header looks like (Just a 16-bit number):
+```
+header multicast_grp_t {
+    bit<16> mcast_grp; 
+    // if 0: treat as unicast; 
+    // if others: do multicast;
+}
+```
+
+If a packet contains `multicast_grp` header, the switch check the value in it and decide multicast/unicast action. If there's no `multicast_grp` header, we just perform L2-forwarding (forward base on MAC address) on the packet.
+
+We have already defined some multicast groups in the switch runtime (it's defined in `topo/s1-runtime.json`): 
 - Group 12: h1, h2
 - Group 13: h1, h3
 - Group 23: h2, h3
-- Group field is 0: treat as unicast
+- Group field is 0: treat as unicast (l2 forwarding)
 
-The use case is very simple, when the switch receive a valid multicast packet (marked with customized multicast request packet header), it multicasts this packet to corresponding group. Meanwhile, all other traffic should not be affected.
+Before you start dirty your hands. There's one additional thing we want you to implement. It's about the MAC address setting. 
 
-(
-   Hint: there's difference between "broadcast" and "multicast": For broadcasting, the sender should also receive a copy of the message. 
+In this assignment, for the ease of implementation, the MAC address of testing multicast packets from sender is randomly chosen from the target group. 
 
-   But in our function, we DO NOT allow the sender to receive the message copy. You should be careful with this.
-)
+Before sending the multicast to receivers, we wish the packets received by the receivers have their corresponding destination mac address. 
+
+For example:
+- h1: send a packet (h1 -> h2 / multicast to group 23 / data)
+- switch: received this multicast packet, noted it should multicast to h2 and h3, do the forwarding, and edit the destination mac address to h2 / h3
+- h2: receive packet (h1 -> h2 / multicast to group 23 / data)
+- h3: receive packet (h1 -> **h3** / multicast to group 23 / data)
+
+Now you can start writing the code!
 
 (Comment: Do you see the amazing freedom that programmable networks offer?)
 
@@ -97,6 +118,10 @@ actions, as defined in the P4Info file produced by the compiler (look for the
 file `build/basic.p4.p4info.txt` after executing `make run`). Any changes in the P4
 program that add or rename tables, keys, or actions will need to be reflected in
 these `sX-runtime.json` files.
+
+A fixed runtime rule is not enough for actual production demands. So there's APIs you can use in Python/C++ to dynamically interact with programmable data planes. This is super useful with we want to build advance functions inside our smart network. 
+
+But this part is too complex for this assignment so we won't talk about it here. Just use the fixed rules we provide to you. 
 
 ## Step 2: Implement L2 Multicast
 
