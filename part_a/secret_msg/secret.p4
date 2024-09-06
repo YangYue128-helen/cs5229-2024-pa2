@@ -161,12 +161,20 @@ control MyIngress(inout headers hdr,
         if(hdr.secret.isValid()) {
             /* TODO: your code here */
             /* Hint 1: verify if the secret message is destined to the switch */
-            /* Hint 2: there are two cases to handle -- DROPOFF, PICKUP */
-            /* Hint 3: what happens when you PICKUP from an empty mailbox? */
-            /* Hint 4: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
-            /* Hint 5: msg_checksums are important! */
-            /* Hint 6: once everything is done, swap addresses, set port and reply to sender */
-            password_check.apply();
+
+            /* Hint 2: check password before processing the packet */
+
+            /* Hint 3: if the password is correct, continue; if the password is incorrect, what should you reply? */
+
+            /* Hint 4: there are two cases to handle -- DROPOFF, PICKUP */
+
+            /* Hint 5: what happens when you PICKUP from an empty mailbox? */
+
+            /* Hint 6: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
+
+            /* Hint 7: msg_checksums are important! */
+
+            /* Hint 8: once everything is done, swap addresses, set port and reply to sender */
         }
         ipv4_forward.apply();
     }
