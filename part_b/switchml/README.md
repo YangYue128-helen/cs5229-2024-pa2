@@ -1,37 +1,54 @@
 # B: SwitchML
 
-(We assume you have read and understood the paper "SwitchML" in NSDI 2021 
+(We assume you have read and understood the basics of the paper "SwitchML" in NSDI 2021 
 (https://www.usenix.org/conference/nsdi21/presentation/sapio) )
 
 ## Introduction
-The objective of this project is to implement a very simple prototype of switchml.
+The objective of this project is to implement a very simple prototype of SwitchML.
 
 The topology used in this assignment is like this (defined in `topo/topology.json`):
 ![Topology](./images/topo_img.png)
 
-We have four distributed machine learning workers running a data parallel training. After one iteration, they need to sync gradients with each other. In switchml, the programmable switch works like a parameter server, it will gather each worker's gradients, calculate the average and multicast to the workers.
+We have four distributed machine learning workers running a data parallel training. And they are connected through a switch.
 
-The process looks like this:
+Assume after one iteration, each worker has finished calculating the gradient, they need to synchronize gradients with each other. 
+
+Traditionally, there will be a "parameter server" who will receive all the gradients, calculate the average, and send back to each worker.
+
+In switchml, the programmable switch replaces the parameter server, it will gather each worker's gradients, calculate the average and multicast to the workers. 
+
+(But consider the programmable switch cannot do division, actually we are sending SUM back to the servers and ask the servers to calculate average by themselves. In this assignment, we also just do the SUM, not average.)
+
+An example of the gradient average calculation is like this:
 ![Process](./images/algo_img.png)
 
-(However, programmable switches mostly don't support division. Instead of calculate average gradients, we give sum.)
-
-We assume the packets from workers look like:
+We will define a customized packet format for data transfer. The packet format looks like this:
 ![Packet](./images/pkt_img.png)
 
-There is a 16-bit workerID and a 16-bit OpCode, following `8` 32-bit values, representing the gradient. 
+There are: a 16-bit workerID and a 16-bit OpCode, following `8` 32-bit values, each value represents an element in the gradient.
 
-When receive a `DROPOFF` packet, we need to check whether in this iteration, the data from this host is already received. If we haven't received it, then record the data and send a `RECORDED` status back. If already received before, we still send a `RECORDED` status back but won't record the data again, to prevent error from duplicated recording.
+The switchML packet will be wrapped with Ethernet, IP, UDP packet header. And the IP should be this switch (`10.0.0.254`), the port should be the switchML program (`0x3824` on both sender & receiver). 
 
-When we notice all the workers has dropped off there gradients, we send the result back to all of them, with status `RESULT`.
+For the sake of simplicity, we assume the gradients will contain exactly 8 numbers. Each number is 32-bit int. 
 
-There could be errors in the packets. For example, the packet has invalid operation code, then we reply with `FAILURE`.
+When receive a `DROPOFF` packet, we need to check that: 
+- In this iteration, is the data from this host is already received. 
+  - If we haven't received it, then record the data and send a `RECORDED` status back. 
+  - If already received before, we still send a `RECORDED` status back but won't record the data again, to prevent error from duplicated recording.
 
-If a switchML packet is heading to an IP which is not this switch, we should do a normal forwarding. 
+When we notice all the workers has dropped off their gradients, we send (multicast) the result back to all of them, with status `RESULT`.
 
-If the packet has a wrong port number, or it's wrapped in a TCP header, we just simply drop the packet. 
+There could be errors in the packets. For example, the packet may have invalid operation code. 
 
-In distributed machine learning, the gradients are mostly large (MB to GB level). But programmable switches don't have such big memory. SwitchML uses some techniques to aggregate gradients batch by batch. For simplicity, this assignment doesn't require you to implement such a complex system. We only assume 8 numbers in the packet and assume no packet loss.
+If the error is in the switchML data packet, we send back the packet with `FAILURE` status code.
+
+If a packet is heading to an IP which is not this switch, we should do a normal forwarding. 
+
+If the IP is switch's, but UDP header is with wrong port number, we just simply drop the packet. 
+
+If the IP and port are both correct (This switch's switchML program), but it's wrapped in a TCP header, we also just drop it. 
+
+Note: In distributed machine learning, the gradients are mostly large (MB to GB level). But programmable switches don't have such big memory. SwitchML uses some techniques to aggregate gradients batch by batch. For simplicity, this assignment doesn't require you to implement such a complex system. We only assume 8 numbers in the packet and assume no packet loss.
 
 ## Step 1: Run the (incomplete) starter code
 
