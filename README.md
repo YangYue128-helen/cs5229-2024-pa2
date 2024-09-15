@@ -2,6 +2,8 @@
 
 This repository hosts the distribution package of Programming Assignment 2 for the NUS CS5229 Advanced Computer Networks course.
 
+Please find the detailed description readme file of each task under the corresponding folder.
+
 ## Assignment Package
 ### Part A: Baby Steps in P4 (8%)
 There are two exercises, namely "A-1: Multicast" and "A-2: Secret Message Exchange" which can be found from the respective subfolders.
