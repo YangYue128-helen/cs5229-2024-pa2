@@ -3,9 +3,9 @@
 // CS5229 Programming Assignment 2
 // Part A - 2 Secret Message
 //
-// Name: Albert Einstein
-// Student Number: A0123456B
-// NetID: e0123456
+// Name: Yang Yue
+// Student Number: A0194569J
+// NetID: e0376999
 
 #include <core.p4>
 #include <v1model.p4>
@@ -58,11 +58,20 @@ header ipv4_t {
 header icmp_t {
     /* TODO: your code here */
     /* Hint: define ICMP header */
+    bit<8> type;
+    bit<8> code;
+    bit<16> checksum;
+    bit<16> identifier;
+    bit<16> sequence_number;
 }
 
 header udp_t {
     /* TODO: your code here */
     /* Hint: define UDP header */
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<16> length;
+    bit<16> checksum;
 }
 
 header secret_t {
@@ -97,6 +106,35 @@ parser MyParser(packet_in packet,
     state start {
         /* TODO: your code here */
         /* Hint: implement your parser */
+        transition parse_ethernet;
+    }
+
+    state parse_ethernet {
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType) {
+            TYPE_IPV4: parse_ipv4;
+            
+        }
+    }
+
+    state parse_ipv4 {
+        packet.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            IPV4_UDP_PRON: parse_udp;
+          
+        }
+    }
+
+    state parse_udp {
+        packet.extract(hdr.udp);
+        transition select(hdr.udp.srcPort, hdr.udp.dstPort) {
+            (TYPE_SECRET, TYPE_SECRET): parse_secret;
+            
+        }
+    }
+
+    state parse_secret {
+        packet.extract(hdr.secret);
         transition accept;
     }
 
@@ -123,6 +161,8 @@ control MyIngress(inout headers hdr,
     register<bit<32>>(65536) secret_mailboxes;
     register<bit<32>>(65536) msg_checksums;
 
+    bit<32> password_hash;
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
@@ -133,6 +173,7 @@ control MyIngress(inout headers hdr,
 
     action check_password(bit<32> stored_password) {
         /* TODO: your code here */
+        hash(password_hash, HashAlgorithm.crc32, (bit<32>)0, {stored_password, hdr.secret.salt}, MAX_HASHED_VAL);
     }
 
     table ipv4_forward {
@@ -161,20 +202,60 @@ control MyIngress(inout headers hdr,
         if(hdr.secret.isValid()) {
             /* TODO: your code here */
             /* Hint 1: verify if the secret message is destined to the switch */
+            if (hdr.ipv4.dstAddr == SWITCH_IP) {
+                /* Hint 2: check password before processing the packet */
+                password_check.apply();
+                /* Hint 3: if the password is correct, continue; if the password is incorrect, what should you reply? */
+                if (password_hash == hdr.secret.pw_hash) {
+                    /* Hint 4: there are two cases to handle -- DROPOFF, PICKUP */
+                    if (hdr.secret.opCode == SECRET_OPT.DROPOFF) {
+                        secret_mailboxes.write((bit<32>)hdr.secret.mailboxNum, hdr.secret.message);
+                        bit<32> computed_hash;
+                        hash(computed_hash, HashAlgorithm.crc32, (bit<32>)0, {hdr.secret.message}, MAX_HASHED_VAL);
+                        msg_checksums.write((bit<32>)hdr.secret.mailboxNum, computed_hash);
+                        hdr.secret.opCode = SECRET_OPT.SUCCESS;
+                    } else if (hdr.secret.opCode == SECRET_OPT.PICKUP) {
+                        bit<32> stored_message;
+                        bit<32> stored_checksum;
+                        secret_mailboxes.read(stored_message, (bit<32>)hdr.secret.mailboxNum);
+                        msg_checksums.read(stored_checksum, (bit<32>)hdr.secret.mailboxNum);
+                        /* Hint 5: what happens when you PICKUP from an empty mailbox? */
+                        if (stored_message == OV_VAL) {
+                            hdr.secret.opCode = SECRET_OPT.FAILURE;
+                        } else {
+                            bit<32> computed_hash;
+                            hash(computed_hash, HashAlgorithm.crc32, (bit<32>)0, {stored_message}, MAX_HASHED_VAL);
+                            if (computed_hash == stored_checksum) {
+                                hdr.secret.message = stored_message;
+                                hdr.secret.opCode = SECRET_OPT.SUCCESS;
+                                /* Hint 6: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
+                                secret_mailboxes.write((bit<32>)hdr.secret.mailboxNum, OV_VAL);
+                                /* Hint 7: msg_checksums are important! */
+                                msg_checksums.write((bit<32>)hdr.secret.mailboxNum, OV_VAL);
+                            } else {
+                                hdr.secret.opCode = SECRET_OPT.FAILURE;
+                            }
+                        }
+                    }
+                } else {
+                    hdr.secret.opCode = SECRET_OPT.WRONGPW;
+                }
+                /* Hint 8: once everything is done, swap addresses, set port and reply to sender */
+                    macAddr_t tmp = hdr.ethernet.srcAddr;
+                    hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                    hdr.ethernet.dstAddr = tmp;
 
-            /* Hint 2: check password before processing the packet */
+                    ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
+                    hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+                    hdr.ipv4.dstAddr = tmp2;
 
-            /* Hint 3: if the password is correct, continue; if the password is incorrect, what should you reply? */
+                    bit<16> tmp3 = hdr.udp.srcPort;
+                    hdr.udp.srcPort = hdr.udp.dstPort;
+                    hdr.udp.dstPort = tmp3;
 
-            /* Hint 4: there are two cases to handle -- DROPOFF, PICKUP */
+                    standard_metadata.egress_spec = standard_metadata.ingress_port;
 
-            /* Hint 5: what happens when you PICKUP from an empty mailbox? */
-
-            /* Hint 6: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
-
-            /* Hint 7: msg_checksums are important! */
-
-            /* Hint 8: once everything is done, swap addresses, set port and reply to sender */
+            }
         }
         ipv4_forward.apply();
     }
@@ -225,6 +306,10 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         /* TODO: your code here */
+        packet.emit(hdr.ethernet);
+        packet.emit(hdr.ipv4);
+        packet.emit(hdr.udp);
+        packet.emit(hdr.secret);
     }
 }
 
