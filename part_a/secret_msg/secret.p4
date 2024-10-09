@@ -173,7 +173,7 @@ control MyIngress(inout headers hdr,
 
     action check_password(bit<32> stored_password) {
         /* TODO: your code here */
-        hash(password_hash, HashAlgorithm.crc32, (bit<32>)0, {stored_password, hdr.secret.salt}, MAX_HASHED_VAL);
+        hash(password_hash, HashAlgorithm.crc32, (bit<32>)0, {(stored_password & hdr.secret.salt)}, MAX_HASHED_VAL);
     }
 
     table ipv4_forward {
@@ -220,7 +220,7 @@ control MyIngress(inout headers hdr,
                         secret_mailboxes.read(stored_message, (bit<32>)hdr.secret.mailboxNum);
                         msg_checksums.read(stored_checksum, (bit<32>)hdr.secret.mailboxNum);
                         /* Hint 5: what happens when you PICKUP from an empty mailbox? */
-                        if (stored_message == OV_VAL) {
+                        if (stored_message == OV_VAL && stored_checksum == OV_VAL) {
                             hdr.secret.opCode = SECRET_OPT.FAILURE;
                         } else {
                             bit<32> computed_hash;
