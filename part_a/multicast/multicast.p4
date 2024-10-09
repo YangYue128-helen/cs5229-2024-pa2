@@ -3,9 +3,9 @@
 // CS5229 Programming Assignment 2
 // Part A - 1 Multicast
 //
-// Name: Albert Einstein
-// Student Number: A0123456B
-// NetID: e0123456
+// Name: Yang Yue
+// Student Number: A0194569J
+// NetID: e0376999
 
 #include <core.p4>
 #include <v1model.p4>
@@ -53,6 +53,15 @@ parser MyParser(packet_in packet,
     state start {
         /* TODO: your code here */
         /* Hint: implement your parser */
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType) {
+            TYPE_MCAST: parse_multicast_grp;
+            default: accept;
+        }
+    }
+
+    state parse_multicast_grp {
+        packet.extract(hdr.multicast_grp);
         transition accept;
     }
 
@@ -86,10 +95,13 @@ control MyIngress(inout headers hdr,
 
     action multicast() {
         /* TODO: Your code here */
+        standard_metadata.mcast_grp = (bit<16>) hdr.multicast_grp.mcast_grp;
+        meta.update_mac = 1;
     }
 
     action mac_forward(egressSpec_t port) {
         /*  TODO: your code here */
+        standard_metadata.egress_spec = port;
     }
 
     table mac_lookup {
@@ -109,8 +121,15 @@ control MyIngress(inout headers hdr,
 
         /*  TODO: your code here */
         /*  HINT: do you need any metadata? */
-
-        mac_lookup.apply();
+        if (hdr.multicast_grp.isValid()) {
+            if (hdr.multicast_grp.mcast_grp != 0) {
+                multicast();
+            } else {
+                mac_lookup.apply();
+            }
+        } else {
+            mac_lookup.apply();
+        }
 
     }
 
@@ -131,6 +150,7 @@ control MyEgress(inout headers hdr,
     action set_mac_dst_addr(macAddr_t addr) {
         /* TODO: your code here */
         /* HINT: update MAC address */
+        hdr.ethernet.dstAddr = addr;
     }
 
     table port_to_mac {
@@ -147,8 +167,9 @@ control MyEgress(inout headers hdr,
 
     apply {
         /* TODO: your code here */
-
-        port_to_mac.apply();
+        if (meta.update_mac == 1) {
+            port_to_mac.apply();
+        }
         
     }
 }
@@ -169,6 +190,8 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         /* TODO: your code here */
+        packet.emit(hdr.ethernet);
+        packet.emit(hdr.multicast_grp);
     }
 }
 
