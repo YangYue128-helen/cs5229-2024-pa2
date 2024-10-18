@@ -172,8 +172,6 @@ control MyIngress(inout headers hdr,
     action ipv4_forward_action(egressSpec_t port) {
         /* TODO: your code here */
         standard_metadata.egress_spec = port;
-        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-        hdr.ethernet.dstAddr = dstAddr;
     }
     
     action multicast() {
@@ -283,33 +281,12 @@ control MyIngress(inout headers hdr,
                             hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
                             standard_metadata.egress_spec = standard_metadata.ingress_port;
                             
-                            macAddr_t tmp = hdr.ethernet.srcAddr;
-                            hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-                            hdr.ethernet.dstAddr = tmp;
-
-                            ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
-                            hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
-                            hdr.ipv4.dstAddr = tmp2;
-
-                            bit<16> tmp3 = hdr.udp.srcPort;
-                            hdr.udp.srcPort = hdr.udp.dstPort;
-                            hdr.udp.dstPort = tmp3;
                         }
                     } else {
                         //invalid switch_ml
                         hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
                         standard_metadata.egress_spec = standard_metadata.ingress_port;
-                        macAddr_t tmp = hdr.ethernet.srcAddr;
-                        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-                        hdr.ethernet.dstAddr = tmp;
-
-                        ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
-                        hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
-                        hdr.ipv4.dstAddr = tmp2;
-
-                        bit<16> tmp3 = hdr.udp.srcPort;
-                        hdr.udp.srcPort = hdr.udp.dstPort;
-                        hdr.udp.dstPort = tmp3;
+                        
                     }
                 } else {
                     drop();
@@ -362,8 +339,29 @@ control MyEgress(inout headers hdr,
         /* HINT: update destination information */
         /* HINT: check the runtime table, there will something you need*/
         if (standard_metadata.mcast_grp == 1) {
+            hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+            hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+            port_to_host.apply();
+        } else if (hdr.ipv4.isValid() && hdr.ipv4.dstAddr != SWITCH_IP) {
             port_to_host.apply();
         }
+
+        if (hdr.switch_ml.isValid()) {
+            if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.FAILURE || hdr.switch_ml.opCode== (bit<16>)SWITCHML_OPT.RECORDED) {
+                macAddr_t tmp = hdr.ethernet.srcAddr;
+                hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                hdr.ethernet.dstAddr = tmp;
+
+                ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
+                hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+                hdr.ipv4.dstAddr = tmp2;
+
+                bit<16> tmp3 = hdr.udp.srcPort;
+                hdr.udp.srcPort = hdr.udp.dstPort;
+                hdr.udp.dstPort = tmp3;
+            }
+        }
+        
        
         
     }
