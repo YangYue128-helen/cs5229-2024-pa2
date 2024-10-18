@@ -90,6 +90,7 @@ header switchml_t {
 
 struct metadata {
     /* Do you need any meta data? */
+    bit<1> is_result;
 }
 
 struct headers {
@@ -168,7 +169,6 @@ control MyIngress(inout headers hdr,
     register<bit<32>>(1) workers_done;
     /* TODO: Define your action functions */
 
-
     action ipv4_forward_action(egressSpec_t port) {
         /* TODO: your code here */
         standard_metadata.egress_spec = port;
@@ -199,6 +199,7 @@ control MyIngress(inout headers hdr,
             if (hdr.ipv4.dstAddr == SWITCH_IP ) {
                 if (hdr.udp.isValid() && hdr.udp.dstPort == SWITCHML_UDP_PORT) {
                     if (hdr.switch_ml.isValid()) {
+
                         if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.DROPOFF) {
                             bit<1> already_recorded;
                             worker_recorded.read(already_recorded, (bit<32>)hdr.switch_ml.workerID - 1);
@@ -260,6 +261,7 @@ control MyIngress(inout headers hdr,
                                 gradient_sum.read(hdr.switch_ml.value5, 5);
                                 gradient_sum.read(hdr.switch_ml.value6, 6);
                                 gradient_sum.read(hdr.switch_ml.value7, 7);
+                                meta.is_result = 1;
                                 multicast();
                                 //reset
                                 gradient_sum.write(0, 0);
@@ -317,9 +319,11 @@ control MyEgress(inout headers hdr,
 
     action set_host(macAddr_t eth_addr, ip4Addr_t ip_addr, bit<16> host_id) {
         /* TODO: your code here */
-        hdr.ethernet.dstAddr = eth_addr;
-        hdr.ipv4.dstAddr = ip_addr;
-        hdr.switch_ml.workerID = host_id;
+        if (meta.is_result == 1) {
+            hdr.ethernet.dstAddr = eth_addr;
+            hdr.ipv4.dstAddr = ip_addr;
+            hdr.switch_ml.workerID = host_id;
+        }
     }
 
     table port_to_host {
@@ -339,8 +343,10 @@ control MyEgress(inout headers hdr,
         /* HINT: update destination information */
         /* HINT: check the runtime table, there will something you need*/
         if (standard_metadata.mcast_grp == 1) {
-            hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-            hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+            if (meta.is_result == 1) {
+                hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+            }
             port_to_host.apply();
         } else if (hdr.ipv4.isValid() && hdr.ipv4.dstAddr != SWITCH_IP) {
             port_to_host.apply();
