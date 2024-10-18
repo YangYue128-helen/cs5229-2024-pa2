@@ -172,6 +172,8 @@ control MyIngress(inout headers hdr,
     action ipv4_forward_action(egressSpec_t port) {
         /* TODO: your code here */
         standard_metadata.egress_spec = port;
+        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        hdr.ethernet.dstAddr = dstAddr;
     }
     
     action multicast() {
@@ -196,101 +198,127 @@ control MyIngress(inout headers hdr,
 
     apply {
         if (hdr.ethernet.isValid() && hdr.ipv4.isValid()) {
-            if (hdr.ipv4.dstAddr == SWITCH_IP && hdr.udp.isValid() && hdr.udp.dstPort == SWITCHML_UDP_PORT) {
-                if (hdr.switch_ml.isValid()) {
-                    if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.DROPOFF) {
-                        bit<1> already_recorded;
-                        worker_recorded.read(already_recorded, (bit<32>)hdr.switch_ml.workerID - 1);
+            if (hdr.ipv4.dstAddr == SWITCH_IP ) {
+                if (hdr.udp.isValid() && hdr.udp.dstPort == SWITCHML_UDP_PORT) {
+                    if (hdr.switch_ml.isValid()) {
+                        if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.DROPOFF) {
+                            bit<1> already_recorded;
+                            worker_recorded.read(already_recorded, (bit<32>)hdr.switch_ml.workerID - 1);
 
-                        if (already_recorded == 0) {
-                            bit<32> sum_tmp;
-                            gradient_sum.read(sum_tmp, 0);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value0;
-                            gradient_sum.write(0, sum_tmp);
+                            if (already_recorded == 0) {
+                                bit<32> sum_tmp;
+                                gradient_sum.read(sum_tmp, 0);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value0;
+                                gradient_sum.write(0, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 1);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value1;
-                            gradient_sum.write(1, sum_tmp);
+                                gradient_sum.read(sum_tmp, 1);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value1;
+                                gradient_sum.write(1, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 2);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value2;
-                            gradient_sum.write(2, sum_tmp);
+                                gradient_sum.read(sum_tmp, 2);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value2;
+                                gradient_sum.write(2, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 3);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value3;
-                            gradient_sum.write(3, sum_tmp);
+                                gradient_sum.read(sum_tmp, 3);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value3;
+                                gradient_sum.write(3, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 4);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value4;
-                            gradient_sum.write(4, sum_tmp);
+                                gradient_sum.read(sum_tmp, 4);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value4;
+                                gradient_sum.write(4, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 5);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value5;
-                            gradient_sum.write(5, sum_tmp);
+                                gradient_sum.read(sum_tmp, 5);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value5;
+                                gradient_sum.write(5, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 6);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value6;
-                            gradient_sum.write(6, sum_tmp);
+                                gradient_sum.read(sum_tmp, 6);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value6;
+                                gradient_sum.write(6, sum_tmp);
 
-                            gradient_sum.read(sum_tmp, 7);
-                            sum_tmp = sum_tmp + hdr.switch_ml.value7;
-                            gradient_sum.write(7, sum_tmp);
+                                gradient_sum.read(sum_tmp, 7);
+                                sum_tmp = sum_tmp + hdr.switch_ml.value7;
+                                gradient_sum.write(7, sum_tmp);
+                                
+                                worker_recorded.write((bit<32>)hdr.switch_ml.workerID - 1, 1);
+                                bit<32> done_count;
+                                workers_done.read(done_count, 0);
+                                done_count = done_count + 1;
+                                workers_done.write(0, done_count);
+                            }
+
+                            hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.RECORDED;
+                            standard_metadata.egress_spec = standard_metadata.ingress_port;
+
+                            //if all workders done, multicast
+                            bit<32> total_workers_done;
+                            workers_done.read(total_workers_done, 0);
+                            if (total_workers_done == SWITCH_ML_HOST_NUM) {
+                                hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.RESULT;
+                                gradient_sum.read(hdr.switch_ml.value0, 0);
+                                gradient_sum.read(hdr.switch_ml.value1, 1);
+                                gradient_sum.read(hdr.switch_ml.value2, 2);
+                                gradient_sum.read(hdr.switch_ml.value3, 3);
+                                gradient_sum.read(hdr.switch_ml.value4, 4);
+                                gradient_sum.read(hdr.switch_ml.value5, 5);
+                                gradient_sum.read(hdr.switch_ml.value6, 6);
+                                gradient_sum.read(hdr.switch_ml.value7, 7);
+                                multicast();
+                                //reset
+                                gradient_sum.write(0, 0);
+                                gradient_sum.write(1, 0);
+                                gradient_sum.write(2, 0);
+                                gradient_sum.write(3, 0);
+                                gradient_sum.write(4, 0);
+                                gradient_sum.write(5, 0);
+                                gradient_sum.write(6, 0);
+                                gradient_sum.write(7, 0);
+                                worker_recorded.write(0, 0);
+                                worker_recorded.write(1, 0);
+                                worker_recorded.write(2, 0);
+                                worker_recorded.write(3, 0);
+                                workers_done.write(0, 0);
+                            }
+                        } else {
+                            // invalid opcode
+                            hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
+                            standard_metadata.egress_spec = standard_metadata.ingress_port;
                             
-                            worker_recorded.write((bit<32>)hdr.switch_ml.workerID - 1, 1);
-                            bit<32> done_count;
-                            workers_done.read(done_count, 0);
-                            done_count = done_count + 1;
-                            workers_done.write(0, done_count);
-                        }
+                            macAddr_t tmp = hdr.ethernet.srcAddr;
+                            hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                            hdr.ethernet.dstAddr = tmp;
 
-                        hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.RECORDED;
-                        standard_metadata.egress_spec = standard_metadata.ingress_port;
+                            ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
+                            hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+                            hdr.ipv4.dstAddr = tmp2;
 
-                        //if all workders done, multicast
-                        bit<32> total_workers_done;
-                        workers_done.read(total_workers_done, 0);
-                        if (total_workers_done == SWITCH_ML_HOST_NUM) {
-                            hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.RESULT;
-                            gradient_sum.read(hdr.switch_ml.value0, 0);
-                            gradient_sum.read(hdr.switch_ml.value1, 1);
-                            gradient_sum.read(hdr.switch_ml.value2, 2);
-                            gradient_sum.read(hdr.switch_ml.value3, 3);
-                            gradient_sum.read(hdr.switch_ml.value4, 4);
-                            gradient_sum.read(hdr.switch_ml.value5, 5);
-                            gradient_sum.read(hdr.switch_ml.value6, 6);
-                            gradient_sum.read(hdr.switch_ml.value7, 7);
-                            multicast();
-                            //reset
-                            gradient_sum.write(0, 0);
-                            gradient_sum.write(1, 0);
-                            gradient_sum.write(2, 0);
-                            gradient_sum.write(3, 0);
-                            gradient_sum.write(4, 0);
-                            gradient_sum.write(5, 0);
-                            gradient_sum.write(6, 0);
-                            gradient_sum.write(7, 0);
-                            worker_recorded.write(0, 0);
-                            worker_recorded.write(1, 0);
-                            worker_recorded.write(2, 0);
-                            worker_recorded.write(3, 0);
-                            workers_done.write(0, 0);
+                            bit<16> tmp3 = hdr.udp.srcPort;
+                            hdr.udp.srcPort = hdr.udp.dstPort;
+                            hdr.udp.dstPort = tmp3;
                         }
                     } else {
-                        // invalid opcode
+                        //invalid switch_ml
                         hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
                         standard_metadata.egress_spec = standard_metadata.ingress_port;
+                        macAddr_t tmp = hdr.ethernet.srcAddr;
+                        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                        hdr.ethernet.dstAddr = tmp;
+
+                        ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
+                        hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+                        hdr.ipv4.dstAddr = tmp2;
+
+                        bit<16> tmp3 = hdr.udp.srcPort;
+                        hdr.udp.srcPort = hdr.udp.dstPort;
+                        hdr.udp.dstPort = tmp3;
                     }
                 } else {
-                    //invalid switch_ml
-                    hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
-                    standard_metadata.egress_spec = standard_metadata.ingress_port;
+                    drop();
                 }
-            } else if (hdr.ipv4.dstAddr != SWITCH_IP) {
+                
+            } else {
                 //normal forwarding
                 ipv4_forward.apply();
-            } else {
-                drop();
-            }
+            } 
         } else {
             // Not IPv4 packet
             drop();
@@ -336,21 +364,7 @@ control MyEgress(inout headers hdr,
         if (standard_metadata.mcast_grp == 1) {
             port_to_host.apply();
         }
-        if (hdr.switch_ml.isValid()) {
-            if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.FAILURE || hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.RECORDED) {
-                macAddr_t tmp = hdr.ethernet.srcAddr;
-                hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-                hdr.ethernet.dstAddr = tmp;
-
-                ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
-                hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
-                hdr.ipv4.dstAddr = tmp2;
-
-                bit<16> tmp3 = hdr.udp.srcPort;
-                hdr.udp.srcPort = hdr.udp.dstPort;
-                hdr.udp.dstPort = tmp3;
-            }
-        } 
+       
         
     }
 }
