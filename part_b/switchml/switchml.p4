@@ -3,9 +3,9 @@
 // CS5229 Programming Assignment 2
 // Part B - Switch ML
 //
-// Name: Albert Einstein
-// Student Number: A0123456B
-// NetID: e0123456
+// Name: Yang Yue
+// Student Number: A0194569J
+// NetID: e0376999
 
 #include <core.p4>
 #include <v1model.p4>
@@ -57,16 +57,35 @@ header ipv4_t {
 header icmp_t {
     /* TODO: your code here */
     /* Hint: define ICMP header */
+    bit<8> type;
+    bit<8> code;
+    bit<16> checksum;
+    bit<16> identifier;
+    bit<16> sequence_number;
 }
 
 header udp_t {
     /* TODO: your code here */
     /* Hint: define UDP header */
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<16> length;
+    bit<16> checksum;
 }
 
 header switchml_t {
     /* TODO: your code here */
     /* Hint: define SwitchML header */
+    bit<16> workerID;
+    bit<16> opCode;
+    bit<32> value0;
+    bit<32> value1;
+    bit<32> value2;
+    bit<32> value3;
+    bit<32> value4;
+    bit<32> value5;
+    bit<32> value6;
+    bit<32> value7;
 }
 
 struct metadata {
@@ -92,9 +111,37 @@ parser MyParser(packet_in packet,
     state start {
         /* TODO: your code here */
         /* Hint: implement your parser */
-        transition accept;
+        transition parse_ethernet;
     }
 
+    state parse_ethernet {
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType) {
+            TYPE_IPV4: parse_ipv4;
+            default: accept;  
+        }
+    }
+
+    state parse_ipv4 {
+        packet.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            IPV4_UDP_PRON: parse_udp;
+            default: accept;  
+        }
+    }
+
+    state parse_udp {
+        packet.extract(hdr.udp);
+        transition select(hdr.udp.dstPort) {
+            SWITCHML_UDP_PORT: parse_switchml;
+            default: accept;  
+        }
+    }
+
+    state parse_switchml {
+        packet.extract(hdr.switch_ml);
+        transition accept;
+    }
 }
 
 
@@ -116,10 +163,15 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t standard_metadata) {
 
     /* TODO: Define your registers */
+    register<bit<32>>(SWITCH_ML_CAPACITY) gradient_sum;
+    register<bit<1>>(SWITCH_ML_HOST_NUM) worker_recorded;
+    register<bit<32>>(1) workers_done;
     /* TODO: Define your action functions */
+
 
     action ipv4_forward_action(egressSpec_t port) {
         /* TODO: your code here */
+        standard_metadata.egress_spec = port;
     }
     
     action multicast() {
@@ -144,14 +196,101 @@ control MyIngress(inout headers hdr,
 
     apply {
         if (hdr.ethernet.isValid() && hdr.ipv4.isValid()) {
-            /* TODO: your code here */
-            /* Hint 1: verify if the secret message is destined to the switch */
-            /* Hint 2: there are two cases to handle -- DROPOFF, PICKUP */
-            /* Hint 3: what happens when you PICKUP from an empty mailbox? */
-            /* Hint 4: remember to "sanitize" your mailbox with 0xdeadbeef after every PICKUP */
-            /* Hint 5: msg_checksums are important! */
-            /* Hint 6: once everything is done, swap addresses, set port and reply to sender */
-            ipv4_forward.apply();
+            if (hdr.ipv4.dstAddr == SWITCH_IP && hdr.udp.isValid() && hdr.udp.dstPort == SWITCHML_UDP_PORT) {
+                if (hdr.switch_ml.isValid()) {
+                    if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.DROPOFF) {
+                        bit<1> already_recorded;
+                        worker_recorded.read(already_recorded, (bit<32>)hdr.switch_ml.workerID - 1);
+
+                        if (already_recorded == 0) {
+                            bit<32> sum_tmp;
+                            gradient_sum.read(sum_tmp, 0);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value0;
+                            gradient_sum.write(0, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 1);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value1;
+                            gradient_sum.write(1, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 2);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value2;
+                            gradient_sum.write(2, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 3);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value3;
+                            gradient_sum.write(3, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 4);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value4;
+                            gradient_sum.write(4, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 5);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value5;
+                            gradient_sum.write(5, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 6);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value6;
+                            gradient_sum.write(6, sum_tmp);
+
+                            gradient_sum.read(sum_tmp, 7);
+                            sum_tmp = sum_tmp + hdr.switch_ml.value7;
+                            gradient_sum.write(7, sum_tmp);
+                            
+                            worker_recorded.write((bit<32>)hdr.switch_ml.workerID - 1, 1);
+                            bit<32> done_count;
+                            workers_done.read(done_count, 0);
+                            done_count = done_count + 1;
+                            workers_done.write(0, done_count);
+                        }
+
+                        hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.RECORDED;
+                        standard_metadata.egress_spec = standard_metadata.ingress_port;
+
+                        //if all workders done, multicast
+                        bit<32> total_workers_done;
+                        workers_done.read(total_workers_done, 0);
+                        if (total_workers_done == SWITCH_ML_HOST_NUM) {
+                            hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.RESULT;
+                            gradient_sum.read(hdr.switch_ml.value0, 0);
+                            gradient_sum.read(hdr.switch_ml.value1, 1);
+                            gradient_sum.read(hdr.switch_ml.value2, 2);
+                            gradient_sum.read(hdr.switch_ml.value3, 3);
+                            gradient_sum.read(hdr.switch_ml.value4, 4);
+                            gradient_sum.read(hdr.switch_ml.value5, 5);
+                            gradient_sum.read(hdr.switch_ml.value6, 6);
+                            gradient_sum.read(hdr.switch_ml.value7, 7);
+                            multicast();
+                            //reset
+                            gradient_sum.write(0, 0);
+                            gradient_sum.write(1, 0);
+                            gradient_sum.write(2, 0);
+                            gradient_sum.write(3, 0);
+                            gradient_sum.write(4, 0);
+                            gradient_sum.write(5, 0);
+                            gradient_sum.write(6, 0);
+                            gradient_sum.write(7, 0);
+                            worker_recorded.write(0, 0);
+                            worker_recorded.write(1, 0);
+                            worker_recorded.write(2, 0);
+                            worker_recorded.write(3, 0);
+                            workers_done.write(0, 0);
+                        }
+                    } else {
+                        // invalid opcode
+                        hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
+                        standard_metadata.egress_spec = standard_metadata.ingress_port;
+                    }
+                } else {
+                    //invalid switch_ml
+                    hdr.switch_ml.opCode = (bit<16>)SWITCHML_OPT.FAILURE;
+                    standard_metadata.egress_spec = standard_metadata.ingress_port;
+                }
+            } else if (hdr.ipv4.dstAddr != SWITCH_IP) {
+                //normal forwarding
+                ipv4_forward.apply();
+            } else {
+                drop();
+            }
         } else {
             // Not IPv4 packet
             drop();
@@ -173,6 +312,9 @@ control MyEgress(inout headers hdr,
 
     action set_host(macAddr_t eth_addr, ip4Addr_t ip_addr, bit<16> host_id) {
         /* TODO: your code here */
+        hdr.ethernet.dstAddr = eth_addr;
+        hdr.ipv4.dstAddr = ip_addr;
+        hdr.switch_ml.workerID = host_id;
     }
 
     table port_to_host {
@@ -191,7 +333,25 @@ control MyEgress(inout headers hdr,
         /* TODO: your codes here */
         /* HINT: update destination information */
         /* HINT: check the runtime table, there will something you need*/
-        port_to_host.apply();
+        if (standard_metadata.mcast_grp == 1) {
+            port_to_host.apply();
+        }
+        if (hdr.switch_ml.isValid()) {
+            if (hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.FAILURE || hdr.switch_ml.opCode == (bit<16>)SWITCHML_OPT.RECORDED) {
+                macAddr_t tmp = hdr.ethernet.srcAddr;
+                hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+                hdr.ethernet.dstAddr = tmp;
+
+                ip4Addr_t tmp2 = hdr.ipv4.srcAddr;
+                hdr.ipv4.srcAddr = hdr.ipv4.dstAddr;
+                hdr.ipv4.dstAddr = tmp2;
+
+                bit<16> tmp3 = hdr.udp.srcPort;
+                hdr.udp.srcPort = hdr.udp.dstPort;
+                hdr.udp.dstPort = tmp3;
+            }
+        } 
+        
     }
 }
 
@@ -230,6 +390,10 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         /* TODO: your code here */
+        packet.emit(hdr.ethernet);
+        packet.emit(hdr.ipv4);
+        packet.emit(hdr.udp);
+        packet.emit(hdr.switch_ml);
     }
 }
 
